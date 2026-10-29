@@ -148,11 +148,11 @@
 
 <script>
 /* ================= НАСТРОЙКИ ================= */
-const USER = "hacker";            // имя в приглашении
-const HOST = "matrix";            // имя "компьютера"
+const USER = "danilachel";            // имя в приглашении
+const HOST = "megabook_k15s";            // имя "компьютера"
 const RAIN_COLOR = "#00ff66";     // цвет дождя
-const RAIN_SPEED_MS = 45;         // меньше = быстрее
-const FONT_SIZE = 16;             // размер символов дождя
+const RAIN_SPEED_MS = 100;         // меньше = быстрее
+const FONT_SIZE = 12;             // размер символов дождя
 
 /* ================= Хранилище (безопасно) ================= */
 function load(key, def) {
@@ -166,7 +166,7 @@ function save(key, val) {
 /* ================= Матричный дождь ================= */
 const canvas = document.getElementById("rain");
 const ctx = canvas.getContext("2d");
-const CHARS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン0123456789{}[]<>/=+*;$#&|";
+const CHARS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマПЕНИСミムCOCKメモヤユヨラリルレロワン0123456789{}[]<>/=+*;$#&|";
 const FONT = 'JetBrains Mono, Consolas, monospace';
 let cols = 0, drops = [];
 
