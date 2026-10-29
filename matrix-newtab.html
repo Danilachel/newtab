@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>~/newtab</title>
+<style>
+  /* ===== Настройки внешнего вида ===== */
+  :root {
+    --g:  #00ff66;   /* неоновый зелёный     */
+    --gd: #00a845;   /* приглушённый зелёный */
+    --bg: #000;
+    --font: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    overflow: hidden;
+    font-family: var(--font);
+    color: var(--g);
+  }
+
+  /* Лёгкие "строки развёртки" как у старого монитора */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0) 0px,
+      rgba(0, 0, 0, 0) 2px,
+      rgba(0, 0, 0, .18) 3px
+    );
+  }
+
+  canvas { position: fixed; inset: 0; z-index: 0; }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .term {
+    width: min(680px, 100%);
+    background: rgba(0, 10, 4, .82);
+    border: 1px solid var(--gd);
+    box-shadow: 0 0 24px rgba(0, 255, 102, .25), inset 0 0 30px rgba(0, 255, 102, .05);
+    backdrop-filter: blur(3px);
+  }
+
+  .bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--gd);
+    font-size: 12px;
+    color: var(--gd);
+  }
+  .dot { width: 10px; height: 10px; border: 1px solid var(--gd); }
+  .bar .title { margin-left: auto; }
+  .bar button {
+    margin-left: 12px;
+    background: none;
+    border: 1px solid var(--gd);
+    color: var(--gd);
+    font: inherit;
+    padding: 1px 8px;
+    cursor: pointer;
+  }
+  .bar button:hover { color: var(--g); border-color: var(--g); }
+
+  .body { padding: 20px 22px 24px; }
+
+  .clock {
+    font-size: clamp(40px, 9vw, 72px);
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-shadow: 0 0 12px rgba(0, 255, 102, .7);
+  }
+
+  .date { color: var(--gd); margin: 4px 0 18px; font-size: 14px; }
+
+  .log {
+    font-size: 13px;
+    color: var(--gd);
+    min-height: 1.4em;
+    margin-bottom: 8px;
+    white-space: pre-wrap;
+  }
+
+  .line { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+
+  .prompt { white-space: nowrap; text-shadow: 0 0 6px rgba(0, 255, 102, .6); }
+  .prompt b { color: #7dffb0; }
+
+  input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--g);
+    font: inherit;
+    caret-color: var(--g);
+  }
+
+  .hint { margin-top: 14px; font-size: 12px; color: var(--gd); opacity: .8; }
+  .hint code { color: var(--g); }
+</style>
+</head>
+<body>
+
+<canvas id="rain"></canvas>
+
+<div class="wrap">
+  <div class="term">
+    <div class="bar">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      <span class="title">bash — ~/newtab</span>
+      <button id="soundBtn" type="button">♪ on</button>
+    </div>
+    <div class="body">
+      <div class="clock" id="clock">00:00:00</div>
+      <div class="date" id="date"></div>
+      <div class="log" id="log">Добро пожаловать. Введи <code>help</code> для списка команд.</div>
+      <form class="line" id="form" autocomplete="off">
+        <span class="prompt" id="prompt"></span>
+        <input id="cmd" type="text" spellcheck="false" autofocus aria-label="Команда или поиск">
+      </form>
+      <div class="hint">
+        <code>g</code> google · <code>yt</code> youtube · <code>gh</code> github ·
+        <code>so</code> stackoverflow · <code>w</code> wiki · <code>help</code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= НАСТРОЙКИ ================= */
+const USER = "hacker";            // имя в приглашении
+const HOST = "matrix";            // имя "компьютера"
+const RAIN_COLOR = "#00ff66";     // цвет дождя
+const RAIN_SPEED_MS = 45;         // меньше = быстрее
+const FONT_SIZE = 16;             // размер символов дождя
+
+/* ================= Хранилище (безопасно) ================= */
+function load(key, def) {
+  try { const v = localStorage.getItem(key); return v === null ? def : JSON.parse(v); }
+  catch (e) { return def; }
+}
+function save(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+}
+
+/* ================= Матричный дождь ================= */
+const canvas = document.getElementById("rain");
+const ctx = canvas.getContext("2d");
+const CHARS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン0123456789{}[]<>/=+*;$#&|";
+const FONT = 'JetBrains Mono, Consolas, monospace';
+let cols = 0, drops = [];
+
+function resize() {
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
+  cols = Math.ceil(canvas.width / FONT_SIZE);
+  drops = Array.from({ length: cols }, () => Math.random() * -canvas.height / FONT_SIZE);
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawRain() {
+  ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.font = FONT_SIZE + "px " + FONT;
+
+  for (let i = 0; i < cols; i++) {
+    const ch = CHARS[(Math.random() * CHARS.length) | 0];
+    const x = i * FONT_SIZE;
+    const y = drops[i] * FONT_SIZE;
+    // иногда "голова" капли светится белым
+    ctx.fillStyle = Math.random() > 0.97 ? "#d6ffe6" : RAIN_COLOR;
+    ctx.fillText(ch, x, y);
+    if (y > canvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i]++;
+  }
+}
+
+let last = 0;
+function loop(t) {
+  if (t - last > RAIN_SPEED_MS) { drawRain(); last = t; }
+  requestAnimationFrame(loop);
+}
+
+addEventListener("resize", resize);
+resize();
+requestAnimationFrame(loop);
+
+/* ================= Часы ================= */
+const clockEl = document.getElementById("clock");
+const dateEl = document.getElementById("date");
+function tick() {
+  const now = new Date();
+  clockEl.textContent = now.toLocaleTimeString("ru-RU", { hour12: false });
+  dateEl.textContent = "// " + now.toLocaleDateString("ru-RU", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric"
+  });
+}
+tick();
+setInterval(tick, 1000);
+
+/* ================= Звуки клавиш ================= */
+let audio = null;
+let soundOn = load("hk-sound", true);
+const soundBtn = document.getElementById("soundBtn");
+
+function updateSoundBtn() { soundBtn.textContent = soundOn ? "♪ on" : "♪ off"; }
+updateSoundBtn();
+
+function keySound(deep) {
+  if (!soundOn) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const len = (0.03 * audio.sampleRate) | 0;
+    const buf = audio.createBuffer(1, len, audio.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 4);
+
+    const src = audio.createBufferSource();
+    src.buffer = buf;
+    const filter = audio.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.value = deep ? 500 : 1800 + Math.random() * 1400;
+    filter.Q.value = 1.2;
+    const gain = audio.createGain();
+    gain.gain.value = deep ? 0.6 : 0.35;
+
+    src.connect(filter).connect(gain).connect(audio.destination);
+    src.start();
+  } catch (e) {}
+}
+
+function toggleSound() {
+  soundOn = !soundOn;
+  save("hk-sound", soundOn);
+  updateSoundBtn();
+  return "звук клавиш: " + (soundOn ? "включён" : "выключен");
+}
+soundBtn.addEventListener("click", () => { toggleSound(); input.focus(); });
+
+/* ================= Терминал ================= */
+const input = document.getElementById("cmd");
+const form = document.getElementById("form");
+const log = document.getElementById("log");
+document.getElementById("prompt").innerHTML = `<b>${USER}@${HOST}</b>:~$`;
+
+const ENGINES = {
+  g:  q => "https://www.google.com/search?q=" + encodeURIComponent(q),
+  yt: q => "https://www.youtube.com/results?search_query=" + encodeURIComponent(q),
+  gh: q => "https://github.com/search?q=" + encodeURIComponent(q),
+  so: q => "https://stackoverflow.com/search?q=" + encodeURIComponent(q),
+  w:  q => "https://ru.wikipedia.org/w/index.php?search=" + encodeURIComponent(q),
+};
+
+const HELP =
+`команды:
+  g <запрос>    поиск в Google (по умолчанию)
+  yt <запрос>   YouTube
+  gh <запрос>   GitHub
+  so <запрос>   Stack Overflow
+  w <запрос>    Википедия
+  site.com      открыть сайт
+  sound         вкл/выкл звук клавиш
+  clear         очистить вывод`;
+
+let history = load("hk-history", []);
+let histPos = history.length;
+
+function go(url) {
+  log.textContent = "connecting to " + url.replace(/^https?:\/\//, "").split("/")[0] + " ...";
+  setTimeout(() => { location.href = url; }, 150);
+}
+
+function run(raw) {
+  const text = raw.trim();
+  if (!text) return;
+
+  history.push(text);
+  history = history.slice(-50);
+  save("hk-history", history);
+  histPos = history.length;
+
+  if (text === "help")  { log.textContent = HELP; return; }
+  if (text === "clear") { log.textContent = ""; return; }
+  if (text === "sound") { log.textContent = toggleSound(); return; }
+
+  const [first, ...rest] = text.split(" ");
+  if (ENGINES[first] && rest.length) { go(ENGINES[first](rest.join(" "))); return; }
+
+  // похоже на адрес сайта
+  if (!text.includes(" ") && /\.[a-zа-я]{2,}(\/|$)/i.test(text)) {
+    go(/^https?:\/\//.test(text) ? text : "https://" + text);
+    return;
+  }
+
+  go(ENGINES.g(text));
+}
+
+form.addEventListener("submit", e => {
+  e.preventDefault();
+  keySound(true);
+  run(input.value);
+  input.value = "";
+});
+
+input.addEventListener("keydown", e => {
+  if (e.key === "ArrowUp" && history.length) {
+    e.preventDefault();
+    histPos = Math.max(0, histPos - 1);
+    input.value = history[histPos];
+  } else if (e.key === "ArrowDown" && history.length) {
+    e.preventDefault();
+    histPos = Math.min(history.length, histPos + 1);
+    input.value = history[histPos] || "";
+  } else if (e.key.length === 1 || e.key === "Backspace") {
+    keySound(false);
+  }
+});
+
+// Начал печатать в любом месте — фокус сразу в строку
+addEventListener("keydown", e => {
+  if (document.activeElement !== input && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    input.focus();
+  }
+});
+addEventListener("click", () => input.focus());
+input.focus();
+</script>
+</body>
+</html>
