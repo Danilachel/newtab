@@ -10,6 +10,8 @@
     --g:  #00ff66;   /* неоновый зелёный     */
     --gd: #00a845;   /* приглушённый зелёный */
     --bg: #000;
+    --panel: rgba(0, 10, 4, .82);
+    --glow: 0 0 24px rgba(0, 255, 102, .25), inset 0 0 30px rgba(0, 255, 102, .05);
     --font: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
   }
 
@@ -23,12 +25,12 @@
     color: var(--g);
   }
 
-  /* Лёгкие "строки развёртки" как у старого монитора */
+  /* Строки развёртки как у старого монитора */
   body::after {
     content: "";
     position: fixed;
     inset: 0;
-    z-index: 2;
+    z-index: 5;
     pointer-events: none;
     background: repeating-linear-gradient(
       to bottom,
@@ -38,8 +40,18 @@
     );
   }
 
-  canvas { position: fixed; inset: 0; z-index: 0; }
+  canvas#rain { position: fixed; inset: 0; z-index: 0; }
 
+  button {
+    background: none;
+    border: 1px solid var(--gd);
+    color: var(--gd);
+    font: inherit;
+    cursor: pointer;
+  }
+  button:hover, button.on { color: var(--g); border-color: var(--g); text-shadow: 0 0 6px rgba(0,255,102,.6); }
+
+  /* ---------- Окно терминала ---------- */
   .wrap {
     position: relative;
     z-index: 1;
@@ -50,13 +62,14 @@
     padding: 16px;
   }
 
-  .term {
-    width: min(680px, 100%);
-    background: rgba(0, 10, 4, .82);
+  .term, .player {
+    background: var(--panel);
     border: 1px solid var(--gd);
-    box-shadow: 0 0 24px rgba(0, 255, 102, .25), inset 0 0 30px rgba(0, 255, 102, .05);
+    box-shadow: var(--glow);
     backdrop-filter: blur(3px);
   }
+
+  .term { width: min(680px, 100%); }
 
   .bar {
     display: flex;
@@ -69,16 +82,7 @@
   }
   .dot { width: 10px; height: 10px; border: 1px solid var(--gd); }
   .bar .title { margin-left: auto; }
-  .bar button {
-    margin-left: 12px;
-    background: none;
-    border: 1px solid var(--gd);
-    color: var(--gd);
-    font: inherit;
-    padding: 1px 8px;
-    cursor: pointer;
-  }
-  .bar button:hover { color: var(--g); border-color: var(--g); }
+  .bar button { margin-left: 12px; padding: 1px 8px; }
 
   .body { padding: 20px 22px 24px; }
 
@@ -100,11 +104,10 @@
   }
 
   .line { display: flex; align-items: center; gap: 8px; font-size: 16px; }
-
   .prompt { white-space: nowrap; text-shadow: 0 0 6px rgba(0, 255, 102, .6); }
   .prompt b { color: #7dffb0; }
 
-  input {
+  #cmd {
     flex: 1;
     min-width: 0;
     background: transparent;
@@ -117,18 +120,107 @@
 
   .hint { margin-top: 14px; font-size: 12px; color: var(--gd); opacity: .8; }
   .hint code { color: var(--g); }
+
+  /* ---------- Плеер сбоку ---------- */
+  .player {
+    position: fixed;
+    z-index: 2;
+    right: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 300px;
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+  }
+  .player.hidden { display: none; }
+
+  .pbody { padding: 14px 14px 10px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+
+  .now {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 0 6px rgba(0, 255, 102, .5);
+  }
+  .now::before { content: "> "; color: var(--gd); }
+
+  #viz { width: 100%; height: 40px; display: block; }
+
+  .prog {
+    height: 8px;
+    border: 1px solid var(--gd);
+    cursor: pointer;
+    position: relative;
+  }
+  .prog .fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0%;
+    background: var(--g);
+    box-shadow: 0 0 8px rgba(0, 255, 102, .7);
+  }
+
+  .time { display: flex; justify-content: space-between; font-size: 11px; color: var(--gd); }
+
+  .ctrls { display: flex; gap: 6px; }
+  .ctrls button { flex: 1; padding: 4px 0; font-size: 13px; }
+
+  .vol { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--gd); }
+  .vol input { flex: 1; accent-color: var(--g); }
+
+  .list {
+    list-style: none;
+    border-top: 1px solid rgba(0, 168, 69, .4);
+    padding-top: 8px;
+    overflow-y: auto;
+    min-height: 0;
+    max-height: 40vh;
+    font-size: 12px;
+    scrollbar-color: var(--gd) transparent;
+    scrollbar-width: thin;
+  }
+  .list li {
+    padding: 3px 4px;
+    color: var(--gd);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .list li:hover { color: var(--g); background: rgba(0, 255, 102, .06); }
+  .list li.cur { color: var(--g); text-shadow: 0 0 6px rgba(0, 255, 102, .6); }
+  .list li.cur::before { content: "▸ "; }
+  .list .empty { cursor: default; white-space: normal; line-height: 1.5; }
+
+  /* Ярлычок для свёрнутого плеера */
+  .ptab {
+    position: fixed;
+    z-index: 2;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 12px 8px;
+    border-right: none;
+    background: var(--panel);
+    font-size: 16px;
+    display: none;
+  }
+  .ptab.show { display: block; }
 </style>
 </head>
 <body>
 
 <canvas id="rain"></canvas>
 
+<!-- ======= Терминал ======= -->
 <div class="wrap">
   <div class="term">
     <div class="bar">
       <div class="dot"></div><div class="dot"></div><div class="dot"></div>
       <span class="title">bash — ~/newtab</span>
-      <button id="soundBtn" type="button">♪ on</button>
+      <button id="soundBtn" type="button" title="Звук клавиш">⌨ on</button>
     </div>
     <div class="body">
       <div class="clock" id="clock">00:00:00</div>
@@ -140,19 +232,49 @@
       </form>
       <div class="hint">
         <code>g</code> google · <code>yt</code> youtube · <code>gh</code> github ·
-        <code>so</code> stackoverflow · <code>w</code> wiki · <code>help</code>
+        <code>so</code> stackoverflow · <code>w</code> wiki · <code>play</code> музыка · <code>help</code>
       </div>
     </div>
   </div>
 </div>
 
+<!-- ======= Плеер ======= -->
+<aside class="player" id="player">
+  <div class="bar">
+    <span>♫ ~/music</span>
+    <span class="title" id="pCount">0 tracks</span>
+    <button id="pHide" type="button" title="Свернуть">_</button>
+  </div>
+  <div class="pbody">
+    <div class="now" id="pNow">загрузка плейлиста...</div>
+    <canvas id="viz" width="272" height="40"></canvas>
+    <div class="prog" id="pProg"><div class="fill" id="pFill"></div></div>
+    <div class="time"><span id="pCur">00:00</span><span id="pDur">00:00</span></div>
+    <div class="ctrls">
+      <button id="pPrev" type="button" title="Предыдущий">&lt;&lt;</button>
+      <button id="pPlay" type="button" title="Играть / пауза">&gt;</button>
+      <button id="pNext" type="button" title="Следующий">&gt;&gt;</button>
+      <button id="pShuf" type="button" title="Перемешать">rnd</button>
+    </div>
+    <div class="vol">vol <input type="range" id="pVol" min="0" max="100" aria-label="Громкость"></div>
+    <ul class="list" id="pList"></ul>
+  </div>
+</aside>
+<button class="ptab" id="pShow" type="button" title="Показать плеер">♫</button>
+
 <script>
 /* ================= НАСТРОЙКИ ================= */
-const USER = "danilachel";            // имя в приглашении
-const HOST = "megabook_k15s";            // имя "компьютера"
+const USER = "hacker";            // имя в приглашении
+const HOST = "matrix";            // имя "компьютера"
 const RAIN_COLOR = "#00ff66";     // цвет дождя
-const RAIN_SPEED_MS = 100;         // меньше = быстрее
-const FONT_SIZE = 12;             // размер символов дождя
+const RAIN_SPEED_MS = 45;         // меньше = быстрее
+const FONT_SIZE = 16;             // размер символов дождя
+
+/* Музыка: файлы лежат в папке music/ этого репозитория */
+const GH_USER   = "Danilachel";   // твой ник на GitHub
+const GH_REPO   = "newtab";       // название репозитория
+const MUSIC_DIR = "music";        // папка с треками
+const AUTOPLAY  = false;          // true = продолжать музыку сразу при открытии вкладки
 
 /* ================= Хранилище (безопасно) ================= */
 function load(key, def) {
@@ -163,11 +285,14 @@ function save(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
 }
 
+const log = document.getElementById("log");
+function msg(text) { log.textContent = text; }
+
 /* ================= Матричный дождь ================= */
 const canvas = document.getElementById("rain");
 const ctx = canvas.getContext("2d");
-const CHARS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマПЕНИСミムCOCKメモヤユヨラリルレロワン0123456789{}[]<>/=+*;$#&|";
-const FONT = 'JetBrains Mono, Consolas, monospace';
+const CHARS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン0123456789{}[]<>/=+*;$#&|";
+const FONT = "JetBrains Mono, Consolas, monospace";
 let cols = 0, drops = [];
 
 function resize() {
@@ -183,12 +308,10 @@ function drawRain() {
   ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.font = FONT_SIZE + "px " + FONT;
-
   for (let i = 0; i < cols; i++) {
     const ch = CHARS[(Math.random() * CHARS.length) | 0];
     const x = i * FONT_SIZE;
     const y = drops[i] * FONT_SIZE;
-    // иногда "голова" капли светится белым
     ctx.fillStyle = Math.random() > 0.97 ? "#d6ffe6" : RAIN_COLOR;
     ctx.fillText(ch, x, y);
     if (y > canvas.height && Math.random() > 0.975) drops[i] = 0;
@@ -199,12 +322,11 @@ function drawRain() {
 let last = 0;
 function loop(t) {
   if (t - last > RAIN_SPEED_MS) { drawRain(); last = t; }
+  drawViz();
   requestAnimationFrame(loop);
 }
-
 addEventListener("resize", resize);
 resize();
-requestAnimationFrame(loop);
 
 /* ================= Часы ================= */
 const clockEl = document.getElementById("clock");
@@ -219,33 +341,36 @@ function tick() {
 tick();
 setInterval(tick, 1000);
 
+/* ================= Общий аудио-движок ================= */
+let actx = null;
+function getCtx() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  return actx;
+}
+
 /* ================= Звуки клавиш ================= */
-let audio = null;
 let soundOn = load("hk-sound", true);
 const soundBtn = document.getElementById("soundBtn");
-
-function updateSoundBtn() { soundBtn.textContent = soundOn ? "♪ on" : "♪ off"; }
+function updateSoundBtn() { soundBtn.textContent = soundOn ? "⌨ on" : "⌨ off"; }
 updateSoundBtn();
 
 function keySound(deep) {
   if (!soundOn) return;
   try {
-    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-    const len = (0.03 * audio.sampleRate) | 0;
-    const buf = audio.createBuffer(1, len, audio.sampleRate);
+    const a = getCtx();
+    const len = (0.03 * a.sampleRate) | 0;
+    const buf = a.createBuffer(1, len, a.sampleRate);
     const data = buf.getChannelData(0);
     for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 4);
-
-    const src = audio.createBufferSource();
+    const src = a.createBufferSource();
     src.buffer = buf;
-    const filter = audio.createBiquadFilter();
+    const filter = a.createBiquadFilter();
     filter.type = "bandpass";
     filter.frequency.value = deep ? 500 : 1800 + Math.random() * 1400;
     filter.Q.value = 1.2;
-    const gain = audio.createGain();
+    const gain = a.createGain();
     gain.gain.value = deep ? 0.6 : 0.35;
-
-    src.connect(filter).connect(gain).connect(audio.destination);
+    src.connect(filter).connect(gain).connect(a.destination);
     src.start();
   } catch (e) {}
 }
@@ -258,10 +383,243 @@ function toggleSound() {
 }
 soundBtn.addEventListener("click", () => { toggleSound(); input.focus(); });
 
+/* ================= МУЗЫКАЛЬНЫЙ ПЛЕЕР ================= */
+const AUDIO_RE = /\.(mp3|ogg|opus|wav|m4a|flac|aac)$/i;
+const player = new Audio();
+player.preload = "metadata";
+
+const $ = id => document.getElementById(id);
+const pEl = $("player"), pShow = $("pShow");
+const pNow = $("pNow"), pCount = $("pCount"), pList = $("pList");
+const pPlay = $("pPlay"), pShuf = $("pShuf"), pVol = $("pVol");
+const pFill = $("pFill"), pCur = $("pCur"), pDur = $("pDur"), pProg = $("pProg");
+const viz = $("viz"), vctx = viz.getContext("2d");
+
+let tracks = [];
+let cur = load("hk-track", 0);
+let shuffle = load("hk-shuffle", false);
+let analyser = null, srcNode = null, vizData = null;
+
+player.volume = load("hk-vol", 0.6);
+pVol.value = Math.round(player.volume * 100);
+pShuf.classList.toggle("on", shuffle);
+
+const trackUrl = name => MUSIC_DIR + "/" + encodeURIComponent(name);
+const prettyName = name => name.replace(/\.[^.]+$/, "").replace(/_+/g, " ");
+const fmt = s => {
+  if (!isFinite(s)) return "00:00";
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return String(m).padStart(2, "0") + ":" + String(sec).padStart(2, "0");
+};
+
+/* Список треков берём из папки через GitHub API (кешируем на 30 минут) */
+async function loadPlaylist() {
+  const cached = load("hk-playlist", null);
+  if (cached && Date.now() - cached.t < 30 * 60 * 1000) return cached.list;
+  try {
+    const r = await fetch(`https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${MUSIC_DIR}`);
+    if (!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    const list = data
+      .filter(f => f.type === "file" && AUDIO_RE.test(f.name))
+      .map(f => f.name)
+      .sort((a, b) => a.localeCompare(b, "ru", { numeric: true }));
+    save("hk-playlist", { t: Date.now(), list });
+    return list;
+  } catch (e) {
+    return cached ? cached.list : [];
+  }
+}
+
+function renderList() {
+  pList.innerHTML = "";
+  if (!tracks.length) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = `плейлист пуст.\nположи mp3 в папку ${MUSIC_DIR}/ репозитория`;
+    pList.appendChild(li);
+    return;
+  }
+  tracks.forEach((name, i) => {
+    const li = document.createElement("li");
+    li.textContent = String(i + 1).padStart(2, "0") + " " + prettyName(name);
+    li.title = prettyName(name);
+    if (i === cur) li.classList.add("cur");
+    li.addEventListener("click", () => { setTrack(i); play(); });
+    pList.appendChild(li);
+  });
+}
+
+function renderNow() {
+  pNow.textContent = tracks.length ? prettyName(tracks[cur]) : "нет треков";
+  pCount.textContent = tracks.length + " tracks";
+}
+
+function setTrack(i, resumeAt) {
+  if (!tracks.length) return;
+  cur = (i + tracks.length) % tracks.length;
+  player.src = trackUrl(tracks[cur]);
+  save("hk-track", cur);
+  save("hk-time", 0);
+  if (resumeAt) {
+    player.addEventListener("loadedmetadata", () => {
+      if (resumeAt < player.duration - 1) player.currentTime = resumeAt;
+    }, { once: true });
+  }
+  renderNow();
+  renderList();
+}
+
+/* Подключаем анализатор для визуализатора (только когда звук разрешён) */
+function ensureGraph() {
+  try {
+    const a = getCtx();
+    if (srcNode || a.state !== "running") return;
+    srcNode = a.createMediaElementSource(player);
+    analyser = a.createAnalyser();
+    analyser.fftSize = 64;
+    vizData = new Uint8Array(analyser.frequencyBinCount);
+    srcNode.connect(analyser);
+    analyser.connect(a.destination);
+  } catch (e) {}
+}
+
+async function play() {
+  if (!tracks.length) { msg(`плейлист пуст: положи треки в папку ${MUSIC_DIR}/`); return; }
+  if (!player.src) setTrack(cur);
+  try { const a = getCtx(); if (a.state === "suspended") await a.resume(); } catch (e) {}
+  ensureGraph();
+  try { await player.play(); }
+  catch (e) { msg("браузер заблокировал автозапуск — нажми > в плеере"); }
+}
+
+function pause() { player.pause(); }
+function togglePlay() { player.paused ? play() : pause(); }
+
+function nextIndex() {
+  if (shuffle && tracks.length > 1) {
+    let n;
+    do { n = (Math.random() * tracks.length) | 0; } while (n === cur);
+    return n;
+  }
+  return cur + 1;
+}
+function next() { setTrack(nextIndex()); play(); }
+function prev() {
+  if (player.currentTime > 3) { player.currentTime = 0; return; }
+  setTrack(cur - 1); play();
+}
+
+function toggleShuffle() {
+  shuffle = !shuffle;
+  save("hk-shuffle", shuffle);
+  pShuf.classList.toggle("on", shuffle);
+  return "перемешивание: " + (shuffle ? "вкл" : "выкл");
+}
+
+function setVolume(v) {
+  v = Math.max(0, Math.min(100, v));
+  player.volume = v / 100;
+  pVol.value = v;
+  save("hk-vol", player.volume);
+}
+
+/* Синхронизация вкладок: играет только одна */
+const TAB_ID = Math.random().toString(36).slice(2);
+const bc = "BroadcastChannel" in window ? new BroadcastChannel("hk-music") : null;
+if (bc) {
+  bc.onmessage = e => {
+    if (e.data && e.data.type === "play" && e.data.id !== TAB_ID && !player.paused) player.pause();
+  };
+}
+
+/* События плеера */
+player.addEventListener("play", () => {
+  pPlay.textContent = "||";
+  pPlay.classList.add("on");
+  if (bc) bc.postMessage({ type: "play", id: TAB_ID });
+});
+player.addEventListener("pause", () => {
+  pPlay.textContent = ">";
+  pPlay.classList.remove("on");
+  save("hk-time", player.currentTime);
+});
+player.addEventListener("ended", next);
+player.addEventListener("error", () => {
+  if (tracks.length) msg("не удалось загрузить: " + tracks[cur]);
+});
+
+let lastSave = 0;
+player.addEventListener("timeupdate", () => {
+  const d = player.duration;
+  pFill.style.width = (isFinite(d) && d ? (player.currentTime / d) * 100 : 0) + "%";
+  pCur.textContent = fmt(player.currentTime);
+  pDur.textContent = fmt(d);
+  const now = Date.now();
+  if (now - lastSave > 2000) { save("hk-time", player.currentTime); lastSave = now; }
+});
+addEventListener("pagehide", () => save("hk-time", player.currentTime));
+
+/* Кнопки плеера */
+pPlay.addEventListener("click", togglePlay);
+$("pNext").addEventListener("click", next);
+$("pPrev").addEventListener("click", prev);
+pShuf.addEventListener("click", toggleShuffle);
+pVol.addEventListener("input", () => setVolume(+pVol.value));
+pProg.addEventListener("click", e => {
+  if (!isFinite(player.duration)) return;
+  const r = pProg.getBoundingClientRect();
+  player.currentTime = ((e.clientX - r.left) / r.width) * player.duration;
+});
+
+/* Свернуть / развернуть */
+function setPanel(open) {
+  pEl.classList.toggle("hidden", !open);
+  pShow.classList.toggle("show", !open);
+  save("hk-panel", open);
+}
+$("pHide").addEventListener("click", () => setPanel(false));
+pShow.addEventListener("click", () => setPanel(true));
+setPanel(load("hk-panel", true));
+
+/* Визуализатор */
+function drawViz() {
+  const w = viz.width, h = viz.height;
+  vctx.clearRect(0, 0, w, h);
+  const bars = 24, gap = 3;
+  const bw = (w - gap * (bars - 1)) / bars;
+  vctx.fillStyle = RAIN_COLOR;
+  vctx.shadowColor = RAIN_COLOR;
+  vctx.shadowBlur = 6;
+  for (let i = 0; i < bars; i++) {
+    let v;
+    if (analyser && !player.paused) {
+      analyser.getByteFrequencyData(vizData);
+      v = vizData[Math.floor(i * vizData.length / bars)] / 255;
+    } else {
+      v = 0.04; // "тишина" — тонкая линия
+    }
+    const bh = Math.max(2, v * h);
+    vctx.fillRect(i * (bw + gap), h - bh, bw, bh);
+  }
+  vctx.shadowBlur = 0;
+}
+
+/* Старт плеера */
+(async () => {
+  tracks = await loadPlaylist();
+  if (cur >= tracks.length) cur = 0;
+  renderList();
+  renderNow();
+  if (tracks.length) {
+    setTrack(cur, load("hk-time", 0));
+    if (AUTOPLAY) play();
+  }
+})();
+
 /* ================= Терминал ================= */
 const input = document.getElementById("cmd");
 const form = document.getElementById("form");
-const log = document.getElementById("log");
 document.getElementById("prompt").innerHTML = `<b>${USER}@${HOST}</b>:~$`;
 
 const ENGINES = {
@@ -273,21 +631,22 @@ const ENGINES = {
 };
 
 const HELP =
-`команды:
-  g <запрос>    поиск в Google (по умолчанию)
-  yt <запрос>   YouTube
-  gh <запрос>   GitHub
-  so <запрос>   Stack Overflow
-  w <запрос>    Википедия
-  site.com      открыть сайт
-  sound         вкл/выкл звук клавиш
-  clear         очистить вывод`;
+`поиск:
+  g / yt / gh / so / w <запрос>   Google, YouTube, GitHub, StackOverflow, Wiki
+  site.com                        открыть сайт
+музыка:
+  play / pause / next / prev      управление
+  vol <0-100>                     громкость
+  shuffle                         перемешивание
+  player                          показать / скрыть плеер
+прочее:
+  sound    звук клавиш     clear    очистить вывод`;
 
 let history = load("hk-history", []);
 let histPos = history.length;
 
 function go(url) {
-  log.textContent = "connecting to " + url.replace(/^https?:\/\//, "").split("/")[0] + " ...";
+  msg("connecting to " + url.replace(/^https?:\/\//, "").split("/")[0] + " ...");
   setTimeout(() => { location.href = url; }, 150);
 }
 
@@ -300,14 +659,27 @@ function run(raw) {
   save("hk-history", history);
   histPos = history.length;
 
-  if (text === "help")  { log.textContent = HELP; return; }
-  if (text === "clear") { log.textContent = ""; return; }
-  if (text === "sound") { log.textContent = toggleSound(); return; }
-
   const [first, ...rest] = text.split(" ");
-  if (ENGINES[first] && rest.length) { go(ENGINES[first](rest.join(" "))); return; }
+  const arg = rest.join(" ");
 
-  // похоже на адрес сайта
+  switch (first) {
+    case "help":    msg(HELP); return;
+    case "clear":   msg(""); return;
+    case "sound":   msg(toggleSound()); return;
+    case "play":    play(); msg("▶ " + (tracks.length ? prettyName(tracks[cur]) : "нет треков")); return;
+    case "pause":   pause(); msg("|| пауза"); return;
+    case "next":    next(); msg(">> " + (tracks.length ? prettyName(tracks[cur]) : "")); return;
+    case "prev":    prev(); msg("<< " + (tracks.length ? prettyName(tracks[cur]) : "")); return;
+    case "shuffle": msg(toggleShuffle()); return;
+    case "player":  setPanel(pEl.classList.contains("hidden")); msg(""); return;
+    case "vol":
+      if (arg && !isNaN(+arg)) { setVolume(+arg); msg("громкость: " + Math.round(player.volume * 100)); }
+      else msg("громкость: " + Math.round(player.volume * 100) + "  (пример: vol 40)");
+      return;
+  }
+
+  if (ENGINES[first] && arg) { go(ENGINES[first](arg)); return; }
+
   if (!text.includes(" ") && /\.[a-zа-я]{2,}(\/|$)/i.test(text)) {
     go(/^https?:\/\//.test(text) ? text : "https://" + text);
     return;
@@ -337,13 +709,27 @@ input.addEventListener("keydown", e => {
   }
 });
 
-// Начал печатать в любом месте — фокус сразу в строку
+/* Первое действие пользователя "разблокирует" звук и визуализатор */
+function unlockAudio() {
+  try {
+    const a = getCtx();
+    if (a.state === "suspended") a.resume().then(ensureGraph);
+    else ensureGraph();
+  } catch (e) {}
+}
+addEventListener("pointerdown", unlockAudio);
+addEventListener("keydown", unlockAudio);
+
+/* Начал печатать где угодно — фокус в строку */
 addEventListener("keydown", e => {
-  if (document.activeElement !== input && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+  if (document.activeElement !== input && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey
+      && !(e.target instanceof HTMLInputElement)) {
     input.focus();
   }
 });
-addEventListener("click", () => input.focus());
+document.querySelector(".wrap").addEventListener("click", () => input.focus());
+
+requestAnimationFrame(loop);
 input.focus();
 </script>
 </body>
